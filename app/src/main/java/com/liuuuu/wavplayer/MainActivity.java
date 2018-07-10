@@ -64,7 +64,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
          * @return
          */
         @Override
-        protected Exception doInBackground(String... fileq) {
+        protected Exception doInBackground(String... file) {
             Exception result = null;
             try {
                 // 播放 WAVE 文件

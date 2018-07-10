@@ -17,7 +17,7 @@ static const char *JAVA_LANG_OUTOFMEMORYERROR = "java/lang/OutOfMemoryError";
 
 struct PlayerContext {
     SLObjectItf engineObject;
-    SLObjectItf engineEngine;
+    SLEngineItf engineEngine;
     SLObjectItf outputMixObject;
     SLObjectItf audioPlayerObject;
     SLAndroidSimpleBufferQueueItf audioPlayerBufferQueue;
@@ -320,7 +320,7 @@ static void CreateBufferQueueAudioPlayer(WAV wav,
             SL_IID_BUFFERQUEUE
     };
 
-    // 需要的接口，如果所需要的接口不要用，请求将失败
+    // 需要的接口。如果所需要的接口不要用，请求将失败
     SLboolean requiredInterfaces[] = {
             SL_BOOLEAN_TRUE // for SL_IID_BUFFERQUEUE
     };
@@ -457,4 +457,70 @@ static void SetAudioPlayerStatePlaying(JNIEnv *env, SLPlayItf audioPlayerPlay) {
 
     // 检查错误
     CheckError(env, result);
+}
+
+void Java_com_liuuuu_wavplayer_MainActivity_play
+        (JNIEnv *env, jobject obj, jstring fileName) {
+    PlayerContext *ctx = new PlayerContext();
+
+    // 打开 WAVE 文件
+    ctx->wav = OpenWaveFile(env, fileName);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 创建 OpenSL ES 引擎
+    CreateEngine(env, ctx->engineObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 实现引擎对象
+    RealizeObject(env, ctx->engineObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 获得引擎接口
+    GetEngineInterface(env, ctx->engineObject, ctx->engineEngine);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 创建输出混合对象
+    CreateOutputMix(env, ctx->engineEngine, ctx->outputMixObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 实现输出混合对象
+    RealizeObject(env, ctx->outputMixObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 初始化缓冲区
+    InitPlayerBuffer(env, ctx->wav, ctx->buffer, ctx->bufferSize);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 创建缓冲区队列音频播放器对象
+    CreateBufferQueueAudioPlayer(ctx->wav, ctx->engineEngine, ctx->outputMixObject,
+                                 ctx->audioPlayerObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 实现音频播放器对象
+    RealizeObject(env, ctx->audioPlayerObject);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 获得音频播放器缓冲区队列接口
+    GetAudioPlayerBufferQueueInterface(env, ctx->audioPlayerObject, ctx->audioPlayerBufferQueue);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 注册播放器回调函数
+    RegisterPlayerCallback(env, ctx->audioPlayerBufferQueue, ctx);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 获得音频播放器播放接口
+    GetAudioPlayerPlayInterface(env, ctx->audioPlayerObject, ctx->audioPlayerPlay);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 设置音频播放器为播放状态
+    SetAudioPlayerStatePlaying(env, ctx->audioPlayerPlay);
+    if (0 != env->ExceptionOccurred()) goto exit;
+
+    // 将第一个缓冲区入队来启动运行
+    PlayerCallback(ctx->audioPlayerBufferQueue, ctx);
+
+    exit:
+    if (0 != env->ExceptionOccurred()) {
+        DestroyContext(ctx);
+    }
 }
